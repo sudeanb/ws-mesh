@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - run: go vet ./...
+      - run: go test ./... -count=1 -timeout 120s
+
+  pages:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: build preview page
+        run: |
+          mkdir -p public_pages
+          cat > public_pages/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>WS Mesh</title>
+          <style>body{background:#0d1321;color:#dce3f2;font-family:monospace;margin:32px;max-width:800px}a{color:#7dd3fc}code,pre{color:#a5b6e8}</style>
+          <h1>WS Mesh — WebSocket broker + flooding mesh</h1>
+          <p>This Pages site is a static preview; the real broker runs with
+          <code>go run ./cmd/wsmesh -addr :8080</code>. Subscribe on one node,
+          publish on another — messages cross the mesh with a hop count.</p>
+          <pre>wsmesh -addr :8081
+          wsmesh -addr :8080 -peers localhost:8081</pre>
+          <h2>Envelope protocol</h2>
+          <pre>{"op":"sub","room":"dev"}
+          {"op":"pub","room":"dev","body":{"hello":"world"}}
+          → {"op":"msg","room":"dev","from":"<sender-id>","id":"<pub-id>","hops":1}</pre>
+          HTML
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public_pages
+      - id: deployment
+        uses: actions/deploy-pages@v4
